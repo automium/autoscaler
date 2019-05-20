@@ -1,0 +1,4 @@
+# Example configuration
+automiumKubeconfig: /path/to/agent/kubeconfig
+clusterName: mykubernetescluster
+dryRun: false
