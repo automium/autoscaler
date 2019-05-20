@@ -57,12 +57,12 @@ func getKeyShortName(key string) string {
 
 // MarkToBeDeleted sets a taint that makes the node unschedulable.
 func MarkToBeDeleted(node *apiv1.Node, client kube_client.Interface) error {
-	return addTaint(node, client, ToBeDeletedTaint, apiv1.TaintEffectNoSchedule)
+	return nil
 }
 
 // MarkDeletionCandidate sets a soft taint that makes the node preferably unschedulable.
 func MarkDeletionCandidate(node *apiv1.Node, client kube_client.Interface) error {
-	return addTaint(node, client, DeletionCandidateTaint, apiv1.TaintEffectPreferNoSchedule)
+	return nil
 }
 
 func addTaint(node *apiv1.Node, client kube_client.Interface, taintKey string, effect apiv1.TaintEffect) error {
