@@ -1,0 +1,12 @@
+FROM golang:1.11.2 AS builder
+
+ENV GOPATH /gopath/
+ENV PATH $GOPATH/bin:$PATH
+RUN apt-get update && apt-get --yes install libseccomp-dev
+RUN go get github.com/tools/godep
+COPY . /gopath/src/k8s.io/autoscaler
+RUN cd /gopath/src/k8s.io/autoscaler/cluster-autoscaler && CGO_ENABLED=0 godep go build -ldflags="-s -w" -o cluster-autoscaler
+
+FROM alpine:latest
+COPY --from=builder /gopath/src/k8s.io/autoscaler/cluster-autoscaler/cluster-autoscaler /bin/cluster-autoscaler
+ENTRYPOINT ["/bin/cluster-autoscaler"]
