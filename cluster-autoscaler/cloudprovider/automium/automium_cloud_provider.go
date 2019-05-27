@@ -87,6 +87,17 @@ func (acp *automiumCloudProvider) Refresh() error {
 	return nil
 }
 
+// GPULabel returns the label added to nodes with GPU resource.
+func (acp *automiumCloudProvider) GPULabel() string {
+	return "accelerators.automium.io/gpu"
+}
+
+// GetAvailableGPUTypes return all available GPU types cloud provider supports.
+func (acp *automiumCloudProvider) GetAvailableGPUTypes() map[string]struct{} {
+	empty := make(map[string]struct{}, 0)
+	return empty
+}
+
 // BuildAutomiumCloudProvider builds the cloud provider
 func BuildAutomiumCloudProvider(automiumProviderConfigPath string, rl *cloudprovider.ResourceLimiter) (cloudprovider.CloudProvider, error) {
 	acp := new(automiumCloudProvider)
