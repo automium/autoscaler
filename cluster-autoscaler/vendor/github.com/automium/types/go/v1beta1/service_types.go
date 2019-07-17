@@ -38,6 +38,8 @@ type ServiceSpec struct {
 
 // ServiceStatus defines the observed state of Service
 type ServiceStatus struct {
+	Phase     string `json:"phase"`
+	ModuleRef string `json:"moduleRef"`
 }
 
 // +genclient
@@ -45,7 +47,15 @@ type ServiceStatus struct {
 
 // Service is the Schema for the services API
 // +k8s:openapi-gen=true
+// +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas
+// +kubebuilder:printcolumn:name="Application",type="string",JSONPath=".metadata.labels['app']",description="The desired application"
+// +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".spec.version",description="The application version"
+// +kubebuilder:printcolumn:name="Replicas",type="string",JSONPath=".spec.replicas",description="The application replicas"
+// +kubebuilder:printcolumn:name="Flavor",type="string",JSONPath=".spec.flavor",description="The instance flavor"
+// +kubebuilder:printcolumn:name="Module",type="string",JSONPath=".status.moduleRef",description="module.core.automium.io reference"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.phase",description="The execution phase"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type Service struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -62,4 +72,3 @@ type ServiceList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Service `json:"items"`
 }
-
