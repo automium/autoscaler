@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/autoscaler/vertical-pod-autoscaler/pkg/utils/limitrange"
 	"net/http"
 
 	"strings"
@@ -28,7 +29,7 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	vpa_types "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1beta2"
+	vpa_types "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	metrics_admission "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/utils/metrics/admission"
 	vpa_api_util "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/utils/vpa"
 	"k8s.io/klog"
@@ -39,11 +40,12 @@ type AdmissionServer struct {
 	recommendationProvider RecommendationProvider
 	podPreProcessor        PodPreProcessor
 	vpaPreProcessor        VpaPreProcessor
+	limitsChecker          limitrange.LimitRangeCalculator
 }
 
 // NewAdmissionServer constructs new AdmissionServer
-func NewAdmissionServer(recommendationProvider RecommendationProvider, podPreProcessor PodPreProcessor, vpaPreProcessor VpaPreProcessor) *AdmissionServer {
-	return &AdmissionServer{recommendationProvider, podPreProcessor, vpaPreProcessor}
+func NewAdmissionServer(recommendationProvider RecommendationProvider, podPreProcessor PodPreProcessor, vpaPreProcessor VpaPreProcessor, limitsChecker limitrange.LimitRangeCalculator) *AdmissionServer {
+	return &AdmissionServer{recommendationProvider, podPreProcessor, vpaPreProcessor, limitsChecker}
 }
 
 type patchRecord struct {
@@ -73,10 +75,11 @@ func (s *AdmissionServer) getPatchesForPodResourceRequest(raw []byte, namespace 
 	if annotationsPerContainer == nil {
 		annotationsPerContainer = vpa_api_util.ContainerToAnnotationsMap{}
 	}
+
 	patches := []patchRecord{}
 	updatesAnnotation := []string{}
 	for i, containerResources := range containersResources {
-		newPatches, newUpdatesAnnotation := s.getContainerPatch(pod, i, "requests", annotationsPerContainer, containerResources)
+		newPatches, newUpdatesAnnotation := s.getContainerPatch(pod, i, annotationsPerContainer, containerResources)
 		patches = append(patches, newPatches...)
 		updatesAnnotation = append(updatesAnnotation, newUpdatesAnnotation)
 	}
@@ -120,7 +123,7 @@ func getAddResourceRequirementValuePatch(i int, kind string, resource v1.Resourc
 		Value: quantity.String()}
 }
 
-func (s *AdmissionServer) getContainerPatch(pod v1.Pod, i int, patchKind string, annotationsPerContainer vpa_api_util.ContainerToAnnotationsMap, containerResources ContainerResources) ([]patchRecord, string) {
+func (s *AdmissionServer) getContainerPatch(pod v1.Pod, i int, annotationsPerContainer vpa_api_util.ContainerToAnnotationsMap, containerResources vpa_api_util.ContainerResources) ([]patchRecord, string) {
 	var patches []patchRecord
 	// Add empty resources object if missing
 	if pod.Spec.Containers[i].Resources.Limits == nil &&
@@ -206,7 +209,7 @@ func validateVPA(vpa *vpa_types.VerticalPodAutoscaler, isCreate bool) error {
 	}
 
 	if isCreate && vpa.Spec.TargetRef == nil {
-		return fmt.Errorf("TargetRef is required. If you're using v1beta1 version of the API, please migrate to v1beta2.")
+		return fmt.Errorf("TargetRef is required. If you're using v1beta1 version of the API, please migrate to v1.")
 	}
 
 	return nil
@@ -254,7 +257,9 @@ func (s *AdmissionServer) admit(data []byte) (*v1beta1.AdmissionResponse, metric
 	// The externalAdmissionHookConfiguration registered via selfRegistration
 	// asks the kube-apiserver only to send admission requests regarding pods & VPA objects.
 	podResource := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
-	vpaResource := metav1.GroupVersionResource{Group: "autoscaling.k8s.io", Version: "v1beta2", Resource: "verticalpodautoscalers"}
+	vpaResourceV1beta2 := metav1.GroupVersionResource{Group: "autoscaling.k8s.io", Version: "v1beta2", Resource: "verticalpodautoscalers"}
+	vpaResourceV1 := metav1.GroupVersionResource{Group: "autoscaling.k8s.io", Version: "v1", Resource: "verticalpodautoscalers"}
+
 	var patches []patchRecord
 	var err error
 	resource := metrics_admission.Unknown
@@ -263,7 +268,7 @@ func (s *AdmissionServer) admit(data []byte) (*v1beta1.AdmissionResponse, metric
 	case podResource:
 		patches, err = s.getPatchesForPodResourceRequest(ar.Request.Object.Raw, ar.Request.Namespace)
 		resource = metrics_admission.Pod
-	case vpaResource:
+	case vpaResourceV1, vpaResourceV1beta2:
 		patches, err = s.getPatchesForVPADefaults(ar.Request.Object.Raw, ar.Request.Operation == v1beta1.Create)
 		resource = metrics_admission.Vpa
 		// we don't let in problematic VPA objects - late validation
@@ -275,7 +280,7 @@ func (s *AdmissionServer) admit(data []byte) (*v1beta1.AdmissionResponse, metric
 			response.Allowed = false
 		}
 	default:
-		patches, err = nil, fmt.Errorf("expected the resource to be %v or %v", podResource, vpaResource)
+		patches, err = nil, fmt.Errorf("expected the resource to be %v, %v or %v", podResource, vpaResourceV1beta2, vpaResourceV1)
 	}
 
 	if err != nil {

@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
+
 	"net/http"
 	"os"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/autoscaler/vertical-pod-autoscaler/pkg/admission-controller/logic"
 	vpa_clientset "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/client/clientset/versioned"
 	"k8s.io/autoscaler/vertical-pod-autoscaler/pkg/target"
+	"k8s.io/autoscaler/vertical-pod-autoscaler/pkg/utils/limitrange"
 	"k8s.io/autoscaler/vertical-pod-autoscaler/pkg/utils/metrics"
 	metrics_admission "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/utils/metrics/admission"
 	vpa_api_util "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/utils/vpa"
@@ -76,14 +78,18 @@ func main() {
 	vpaLister := vpa_api_util.NewAllVpasLister(vpaClient, make(chan struct{}))
 	kubeClient := kube_client.NewForConfigOrDie(config)
 	factory := informers.NewSharedInformerFactory(kubeClient, defaultResyncPeriod)
-	targetSelectorFetcher := target.NewCompositeTargetSelectorFetcher(
-		target.NewVpaTargetSelectorFetcher(config, kubeClient, factory),
-		target.NewBeta1TargetSelectorFetcher(config),
-	)
-	recommendationProvider := logic.NewRecommendationProvider(vpaLister, vpa_api_util.NewCappingRecommendationProcessor(), targetSelectorFetcher)
+	targetSelectorFetcher := target.NewVpaTargetSelectorFetcher(config, kubeClient, factory)
 	podPreprocessor := logic.NewDefaultPodPreProcessor()
 	vpaPreprocessor := logic.NewDefaultVpaPreProcessor()
-	as := logic.NewAdmissionServer(recommendationProvider, podPreprocessor, vpaPreprocessor)
+	var limitRangeCalculator limitrange.LimitRangeCalculator
+	limitRangeCalculator, err = limitrange.NewLimitsRangeCalculator(factory)
+	if err != nil {
+		klog.Errorf("Failed to create limitRangeCalculator, falling back to not checking limits. Error message: %s", err)
+		limitRangeCalculator = limitrange.NewNoopLimitsCalculator()
+	}
+	recommendationProvider := logic.NewRecommendationProvider(limitRangeCalculator, vpa_api_util.NewCappingRecommendationProcessor(limitRangeCalculator), targetSelectorFetcher, vpaLister)
+
+	as := logic.NewAdmissionServer(recommendationProvider, podPreprocessor, vpaPreprocessor, limitRangeCalculator)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		as.Serve(w, r)
 		healthCheck.UpdateLastActivity()

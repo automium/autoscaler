@@ -40,6 +40,9 @@ const (
 
 	// ErrorCodeStockout is error code used in InstanceErrorInfo if stockout occurs.
 	ErrorCodeStockout = "STOCKOUT"
+
+	// ErrorCodeOther is error code used in InstanceErrorInfo if other error occurs.
+	ErrorCodeOther = "OTHER"
 )
 
 // AutoscalingGceClient is used for communicating with GCE API.
@@ -198,6 +201,7 @@ func (client *autoscalingGceClientV1) FetchMigInstances(migRef GceRef) ([]cloudp
 		return nil, err
 	}
 	infos := []cloudprovider.Instance{}
+	errorCodeCounts := make(map[string]int)
 	for _, gceInstance := range gceInstances.ManagedInstances {
 		ref, err := ParseInstanceUrlRef(gceInstance.Instance)
 		if err != nil {
@@ -223,6 +227,7 @@ func (client *autoscalingGceClientV1) FetchMigInstances(migRef GceRef) ([]cloudp
 			errorMessages := []string{}
 			errorFound := false
 			for _, instanceError := range getLastAttemptErrors(gceInstance) {
+				errorCodeCounts[instanceError.Code]++
 				if isStockoutErrorCode(instanceError.Code) {
 					errorInfo.ErrorClass = cloudprovider.OutOfResourcesErrorClass
 					errorInfo.ErrorCode = ErrorCodeStockout
@@ -231,6 +236,7 @@ func (client *autoscalingGceClientV1) FetchMigInstances(migRef GceRef) ([]cloudp
 					errorInfo.ErrorCode = ErrorCodeQuotaExceeded
 				} else if !errorFound {
 					errorInfo.ErrorClass = cloudprovider.OtherErrorClass
+					errorInfo.ErrorCode = ErrorCodeOther
 				}
 				errorFound = true
 
@@ -245,6 +251,9 @@ func (client *autoscalingGceClientV1) FetchMigInstances(migRef GceRef) ([]cloudp
 		}
 
 		infos = append(infos, instance)
+	}
+	if len(errorCodeCounts) > 0 {
+		klog.V(4).Infof("Spotted following instance creation error codes: %#v", errorCodeCounts)
 	}
 	return infos, nil
 }

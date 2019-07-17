@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -238,9 +239,13 @@ func (sr *skippedReasons) Reasons() []string {
 
 var (
 	backoffReason         = &skippedReasons{[]string{"in backoff after failed scale-up"}}
-	maxLimitReachedReason = &skippedReasons{[]string{"max limit reached"}}
+	maxLimitReachedReason = &skippedReasons{[]string{"max node group size reached"}}
 	notReadyReason        = &skippedReasons{[]string{"not ready for scale-up"}}
 )
+
+func maxResourceLimitReached(resources []string) *skippedReasons {
+	return &skippedReasons{[]string{fmt.Sprintf("max cluster %s limit reached", strings.Join(resources, ", "))}}
+}
 
 // ScaleUp tries to scale the cluster up. Return true if it found a way to increase the size,
 // false if it didn't and error if an error occurred. Assumes that all nodes in the cluster are
@@ -359,7 +364,7 @@ func ScaleUp(context *context.AutoscalingContext, processors *ca_processors.Auto
 		checkResult := scaleUpResourcesLeft.checkScaleUpDeltaWithinLimits(scaleUpResourcesDelta)
 		if checkResult.exceeded {
 			klog.V(4).Infof("Skipping node group %s; maximal limit exceeded for %v", nodeGroup.Id(), checkResult.exceededResources)
-			skippedNodeGroups[nodeGroup.Id()] = maxLimitReachedReason
+			skippedNodeGroups[nodeGroup.Id()] = maxResourceLimitReached(checkResult.exceededResources)
 			continue
 		}
 
@@ -563,6 +568,7 @@ func getPodsPredicatePassingCheckFunctions(
 	podsPassingPredicatesCache := make(map[string][]*apiv1.Pod)
 	podsNotPassingPredicatesCache := make(map[string]map[*apiv1.Pod]status.Reasons)
 	errorsCache := make(map[string]error)
+	checker := newPodsSchedulableOnNodeChecker(context, unschedulablePods)
 
 	computeCaches := func(nodeGroupId string) {
 		nodeInfo, found := nodeInfos[nodeGroupId]
@@ -573,7 +579,7 @@ func getPodsPredicatePassingCheckFunctions(
 
 		podsPassing := make([]*apiv1.Pod, 0)
 		podsNotPassing := make(map[*apiv1.Pod]status.Reasons)
-		schedulableOnNode := checkPodsSchedulableOnNode(context, unschedulablePods, nodeGroupId, nodeInfo)
+		schedulableOnNode := checker.checkPodsSchedulableOnNode(nodeGroupId, nodeInfo)
 		for pod, err := range schedulableOnNode {
 			if err == nil {
 				podsPassing = append(podsPassing, pod)
