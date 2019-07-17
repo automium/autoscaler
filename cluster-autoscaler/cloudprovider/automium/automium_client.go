@@ -2,6 +2,7 @@ package automium
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"sync"
 	"time"
@@ -138,6 +139,10 @@ func (ag *AutomiumAgent) EditWorkersCount(svcName string, delta int) error {
 	if &targetService == nil {
 		return errors.New("service not found")
 	}
+
+        if targetService.Status.Phase != "Completed" {
+                return fmt.Errorf("cannot operate on service %s -- not in Completed phase (found phase: %s)", svcName, targetService.Status.Phase)
+        }
 
 	initRep := targetService.Spec.Replicas
 	targetService.Spec.Replicas += delta
