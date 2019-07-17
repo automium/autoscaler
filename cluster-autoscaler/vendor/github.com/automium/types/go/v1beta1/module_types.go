@@ -32,7 +32,6 @@ type ModuleSpec struct {
 	Image    string          `json:"image"`
 	Replicas int             `json:"replicas"`
 	Flavor   string          `json:"flavor"`
-	Action   string          `json:"action"`
 	Env      []corev1.EnvVar `json:"env,omitempty"`
 }
 
@@ -71,4 +70,3 @@ type ModuleList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Module `json:"items"`
 }
-
