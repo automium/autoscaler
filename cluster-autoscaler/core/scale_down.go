@@ -946,10 +946,7 @@ func (sd *ScaleDown) deleteNode(node *apiv1.Node, pods []*apiv1.Pod) errors.Auto
 
 	sd.context.Recorder.Eventf(node, apiv1.EventTypeNormal, "ScaleDown", "marked the node as toBeDeleted/unschedulable")
 
-	// attempt drain
-	if err := drainNode(node, pods, sd.context.ClientSet, sd.context.Recorder, sd.context.MaxGracefulTerminationSec, MaxPodEvictionTime, EvictionRetryTime); err != nil {
-		return err
-	}
+	// drain will be handled by the node itself during shutdown
 	drainSuccessful = true
 
 	// attempt delete from cloud provider
