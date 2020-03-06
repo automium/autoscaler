@@ -55,8 +55,10 @@ func CreateAutomiumAgentConnection(kubeconfigPath, clusterName string) (*Automiu
 
 	client.retrieveAutoscalingServices(clusterName)
 
-	if len(client.autoscalingServices) == 0 {
-		return nil, errors.New("no autoscaling services found -- aborting")
+	for len(client.autoscalingServices) == 0 {
+		klog.Warningf("no autoscaling services found. Requery in %d seconds\n", ServiceRequerySecs)
+		time.Sleep(ServiceRequerySecs * time.Second)
+		client.retrieveAutoscalingServices(clusterName)
 	}
 
 	klog.V(5).Infof("autoscaling services: %+v\n", client.autoscalingServices)
@@ -140,9 +142,9 @@ func (ag *AutomiumAgent) EditWorkersCount(svcName string, delta int) error {
 		return errors.New("service not found")
 	}
 
-        if targetService.Status.Phase != "Completed" {
-                return fmt.Errorf("cannot operate on service %s -- not in Completed phase (found phase: %s)", svcName, targetService.Status.Phase)
-        }
+	if targetService.Status.Phase != "Completed" {
+		return fmt.Errorf("cannot operate on service %s -- not in Completed phase (found phase: %s)", svcName, targetService.Status.Phase)
+	}
 
 	initRep := targetService.Spec.Replicas
 	targetService.Spec.Replicas += delta

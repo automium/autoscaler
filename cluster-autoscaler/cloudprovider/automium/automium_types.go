@@ -13,6 +13,9 @@ const (
 	ProviderName = "automium"
 )
 
+// ServiceRequerySecs is the seconds to wait before rescan the services
+const ServiceRequerySecs = 600
+
 type automiumCloudProvider struct {
 	nodeGroups      []*AutomiumServiceNodeGroup
 	resourceLimiter *cloudprovider.ResourceLimiter
