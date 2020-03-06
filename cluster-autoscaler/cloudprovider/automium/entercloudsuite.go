@@ -56,4 +56,19 @@ var ECSFlavors = map[string]*FlavorData{
 		CPUs:     24,
 		Memory:   131072 * units.MB,
 	},
+	"o1.highcpu-spot.x1": &FlavorData{
+		FlavorID: 410,
+		CPUs:     4,
+		Memory:   4096 * units.MB,
+	},
+	"o1.highcpu-spot.x2": &FlavorData{
+		FlavorID: 420,
+		CPUs:     8,
+		Memory:   8192 * units.MB,
+	},
+	"o1.highcpu-spot.x3": &FlavorData{
+		FlavorID: 430,
+		CPUs:     16,
+		Memory:   16384 * units.MB,
+	},
 }
