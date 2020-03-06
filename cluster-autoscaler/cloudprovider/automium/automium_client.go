@@ -142,8 +142,8 @@ func (ag *AutomiumAgent) EditWorkersCount(svcName string, delta int) error {
 		return errors.New("service not found")
 	}
 
-	if targetService.Status.Phase != "Completed" {
-		return fmt.Errorf("cannot operate on service %s -- not in Completed phase (found phase: %s)", svcName, targetService.Status.Phase)
+	if targetService.Status.Phase == "Running" {
+		return fmt.Errorf("cannot operate on service %s -- still running", svcName)
 	}
 
 	initRep := targetService.Spec.Replicas
