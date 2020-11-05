@@ -62,6 +62,22 @@ func (ng *AutomiumServiceNodeGroup) IncreaseSize(delta int) error {
 		klog.Infof("dry run mode - increased worker count: %d\n", ng.dryRunNodeCount)
 		return nil
 	}
+
+	currentServiceReplicas, err := ng.agentConnection.RetrieveWorkersCount(ng.serviceName)
+	if err != nil {
+		return fmt.Errorf("cannot retrieve replicas for service %s: %s", ng.serviceName, err.Error())
+	}
+
+	klog.V(5).Infof("[svc: %s] IncreaseSize: current replicas: %d\n", ng.serviceName, currentServiceReplicas)
+	klog.V(5).Infof("[svc: %s] IncreaseSize: delta replicas: %d\n", ng.serviceName, delta)
+	klog.V(5).Infof("[svc: %s] IncreaseSize: max replicas allowed for service: %d\n", ng.serviceName, ng.maxWorkers)
+	klog.V(5).Infof("[svc: %s] IncreaseSize: desired total replicas: %d\n", ng.serviceName, currentServiceReplicas+delta)
+
+	if currentServiceReplicas+delta > ng.maxWorkers {
+		klog.Errorf("[svc: %s] IncreaseSize: too many nodes requested -  desired: %d, max: %d\n", ng.serviceName, currentServiceReplicas+delta, ng.maxWorkers)
+		return fmt.Errorf("size increase too large - desired: %d, max: %d", currentServiceReplicas+delta, ng.maxWorkers)
+	}
+
 	ng.workersLock.Lock()
 	defer ng.workersLock.Unlock()
 

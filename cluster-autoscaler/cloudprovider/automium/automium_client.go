@@ -87,6 +87,26 @@ func createRESTClient(config *rest.Config) (*rest.RESTClient, error) {
 	return rc, nil
 }
 
+// RetrieveWorkersCount retrieves the "replicas" count in the service
+func (ag *AutomiumAgent) RetrieveWorkersCount(svcName string) (int, error) {
+	var services v1beta1.ServiceList
+	ag.lockMap[svcName].Lock()
+	defer ag.lockMap[svcName].Unlock()
+
+	err := ag.kubeClient.Get().Resource("services").Do().Into(&services)
+	if err != nil {
+		return -1, err
+	}
+
+	for _, svc := range services.Items {
+		if svc.GetName() == svcName {
+			return svc.Spec.Replicas, nil
+		}
+	}
+
+	return -1, errors.New("service not found")
+}
+
 // RetrieveActiveWorkersCount retrieves active workers
 func (ag *AutomiumAgent) RetrieveActiveWorkersCount(svcName string) (int, error) {
 	var nodes v1beta1.NodeList
